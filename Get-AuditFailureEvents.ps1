@@ -1,7 +1,6 @@
 ﻿[CmdletBinding()]
 param()
 
-# Clear-Host
 [System.GC]::Collect()
 
 Push-Location
@@ -258,11 +257,11 @@ function Export-EvensToCsv
 # script execution starts here #
 ################################
 
-$searchRangeMinutes = $(24*60)
+$searchRangeMinutes = 30 # $(0.25*60)
 $searchRangeMilliSeconds = $(New-TimeSpan -Minutes $searchRangeMinutes).TotalMilliseconds
 "Search Range (min): {0:n0}" -f $($searchRangeMilliSeconds / 60000)
 
-# Clear-Host
+Clear-Host
 
 do
 {
@@ -290,7 +289,7 @@ do
         # $filepath
     }
 
-    $sleepSeconds = $((New-TimeSpan -Minutes $($searchRangeMinutes - 15)).TotalSeconds) - 14.5
+    $sleepSeconds = $((New-TimeSpan -Minutes $($searchRangeMinutes - 29)).TotalSeconds) - 14.5
 
     Write-Host "Pause for $($sleepSeconds/60) minutes`r`n" -ForegroundColor Red
     Start-Sleep -Seconds $sleepSeconds # pause for 1-minute
