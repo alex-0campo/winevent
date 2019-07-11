@@ -261,7 +261,7 @@ $searchRangeMinutes = 30 # $(0.25*60)
 $searchRangeMilliSeconds = $(New-TimeSpan -Minutes $searchRangeMinutes).TotalMilliseconds
 "Search Range (min): {0:n0}" -f $($searchRangeMilliSeconds / 60000)
 
-Clear-Host
+# Clear-Host
 
 do
 {
@@ -276,6 +276,13 @@ do
     $timer.Stop()
     "Elapsed Seconds: {0:n2}" -f $(($timer.ElapsedMilliseconds) / 1000)
 
+    $failedEventGroups | Where-Object { $_.Group.Count -ge 10 } `
+    | ForEach-Object {
+        $_.Group | ft -auto
+        Export-EvensToCsv -reportDate $reportDate -events $_.Group
+    }
+
+    <#
     $failedEventGroups | ft count,name
 
     $failedEventGroups | ForEach-Object {
@@ -288,6 +295,7 @@ do
 
         # $filepath
     }
+    #>
 
     $sleepSeconds = $((New-TimeSpan -Minutes $($searchRangeMinutes - 29)).TotalSeconds) - 14.5
 
@@ -298,120 +306,9 @@ do
 #-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
 
 
-<# pre-convert to function
 
-$reportDate = Get-Date
-$yyyy = $reportDate.Year
-$mm = "{0:00}" -f $reportDate.Month
-$dd = "{0:00}" -f $reportDate.Day
-$hour = "{0:00}" -f $reportDate.Hour
-$min = "{0:00}" -f $reportDate.Minute
-$sec = "{0:00}" -f $reportDate.Second
-
-# create a container for events email report$
-[string]$filepath = "L:\Logs\CsvReports\$yyyy-$mm-$dd $hour$min$sec EventID$($events.id | Select -Unique).csv"
-    
-
-# string builder
-$sb = New-Object -TypeName System.Text.StringBuilder
-
-# number of events found
-$eventsCount = $events.Count
-
-
-for ( $i = 0; $i -lt $eventsCount; $i++ )
-{
-    $timeCreated = $events[$i].TimeCreated #.ToString()
-    $eventID = $events[$i].Id #.ToString()
-
-    # do for all events
-    $eventXML = [xml]$events[$i].ToXml()
-    $elements = $eventXML.Event.EventData.Data.Count
-
-
-
-    # if $i = 0 (first event), then do these tasks
-    if ( $i -eq 0 )
-    {
-        # add TimeCreated and EventID header labels
-        $sb.Append("TimeCreated,EventID,") | Out-Null
-
-        # add headers to string builder $sb
-        for ( $x = 0; $x -lt $elements; $x++ )
-        {
-            if ( $x -lt $($elements - 1) )
-            {
-                $sb.Append( ($eventXML.Event.EventData.Data[$x].Name) + "," ) | Out-Null
-            }
-            else
-            {
-                $sb.AppendLine( ($eventXML.Event.EventData.Data[$x].Name) ) | Out-Null
-            }
-        } # end add headers to string builder $sb
-
-        #$sb.AppendLine("`r`n") | Out-Null
-
-
-
-        # add TimeCreated and EventID values for the first event        
-        $sb.Append("$timeCreated,$eventID,") | Out-Null
-
-        # add first event values to string builder $sb
-        for ( $y = 0; $y -lt $elements; $y++ )
-        {
-            if ( $y -lt $($elements - 1) )
-            {
-                $sb.Append( ($eventXML.Event.EventData.Data[$y].'#text') + "," ) | Out-Null
-            }
-            else
-            {
-                $sb.AppendLine( ($eventXML.Event.EventData.Data[$y].'#text') ) | Out-Null
-            }
-        } # end add first events values to string builder $sb
-    }
-    else
-    {
-
-        # add TimeCreated and EventID values for the first event
-        $sb.Append("$timeCreated,$eventID,") | Out-Null
-
-        # add remaining events' values to string builder $sb
-        for ( $z = 0; $z -lt $elements; $z++ )
-        {
-            
-
-            if ( $z -lt $($elements - 1) )
-            {
-                $sb.Append( ($eventXML.Event.EventData.Data[$z].'#text') + "," ) | Out-Null
-            }
-            else
-            {
-                $sb.AppendLine( ($eventXML.Event.EventData.Data[$z].'#text') ) | Out-Null
-            }
-        } # end add remaining events values to string builder $sb
-    }
-
-    # $sb.ToString()
-
-} # end for $i $events loop
-
-
-# $sb.ToString()
-
-
-New-Item -Path $filepath -Value $($sb.ToString()) -Force | Out-Null
-
-# check number of events; skip sending report if no events matched criteria
-if ( $eventsCount -ge 1 )
-{
-    sendMailAlert -subject 'Failed logins' -body 'Excessive failed logins reported. See attached file for details?' -attachment $filepath
-}
-#>
 
 Pop-Location
-
-
-
 
 <#
 Name                      #text          
