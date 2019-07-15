@@ -181,6 +181,33 @@ If ($PSBoundParameters['Debug']) {
 
 Clear-Host
 
+#region task details
+    <# Task: Search for failed events in the past 15 minutes)
+
+    Workflow:
+
+    1. If the last archived ForwardedEvents log is less than 15 minutes old 
+       then Get-FailedEvents from the last archived log then add to failed events 
+       from the active ForwardedEvents log.
+
+    2. If the last archived ForwardedEvents log is older than 15 minutes then 
+       Get-FailedEvents from the active ForwardedEvents log only.
+
+    
+    Suppress Events: 4662, 4674, 5447, ?
+
+
+    $xml = "<QueryList>
+        <Query Id='0' Path='ForwardedEvents'>
+        <Select Path='ForwardedEvents'>*[System[EventID=4625 and band(Keywords,4503599627370496) 
+        and 
+        TimeCreated[timediff(@SystemTime) &lt;=" + $ms + "]]]</Select>
+        <Suppress Path='ForwardedEvents'>*[System[(EventID=5447)]]</Suppress>
+        </Query>
+    </QueryList>" #>
+
+#endregion
+
 # search for failed events in the past 15 minutes ran at 15-minutes (no overlap monitoring)
 # set task duration for 15-minutes or other duration in minutes
 $searchRangeMilliseconds = $(New-TimeSpan -Minutes 30).TotalMilliseconds
@@ -224,15 +251,17 @@ $xml = @"
 Write-Debug $xml    
 
 $failedEventsGroup = Get-WinEvent -FilterXml $xml | group id | sort count -desc | Where-Object { 
-    $_.count -gt 5 
+    $_.count -gt 10 
 } 
+
+$failedEventsGroup | ft -auto
 
 $attachments = @()
 
 foreach ( $group in $failedEventsGroup )
 {
     # filter 10 or more audit failures but exclude event id 4662 for more reasearch 
-    if ( ($($group.Name) -ne 4662) -and ($($group.Count) -gt 10) )
+    if ( (($($group.Name) -ne 4662) -and ($($group.Name) -ne 4674) -and ($($group.Name) -ne 5447)) -and ($($group.Count) -gt 10) )
     {
 
     # create string builder object to store each events information
