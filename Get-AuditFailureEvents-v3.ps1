@@ -22,7 +22,7 @@ If ($PSBoundParameters['Debug']) {
         $sec = "{0:00}" -f $reportDate.Second
 
         # build CSV file (email report attachment)
-        [string]$filepath = "L:\Logs\CsvReports\$yyyy-$mm-$dd $hour$min$sec EventID $($events.id | Select -Unique).csv"
+        [string]$filepath = "L:\Logs\CsvReports\$yyyy-$mm-$dd-$hour$min$sec-EventID-$($events.id | Select -Unique).csv"
     
         # string builder
         $sb = New-Object -TypeName System.Text.StringBuilder
@@ -114,6 +114,8 @@ If ($PSBoundParameters['Debug']) {
     
         New-Item -Path $filepath -Value $str -Force | Out-Null
 
+        # return the CSV's file path
+        return $filepath
 
     } # end of Export-EvensToCsv function
     #endregion Export-EventsToCsv
@@ -142,10 +144,10 @@ If ($PSBoundParameters['Debug']) {
         [CmdletBinding()]
         param([string]$subject,
               [string]$body,
-              [string]$attachment
+              [string[]]$attachments
              )
         
-        if ( $attachment )
+        if ( $attachments )
         {
             $MailMessage = @{
                 From = "securityAlert@landesa.org"
@@ -153,7 +155,7 @@ If ($PSBoundParameters['Debug']) {
                 Subject = $subject
                 Body = $body
                 SmtpServer = "10.0.0.10"
-                Attachments = $attachment
+                Attachments = $attachments
             }
         }
         else
@@ -219,61 +221,42 @@ $xml = @"
 </QueryList>
 "@
 
-# test here
-# Get-WinEvent -FilterXml $xml
-
 Write-Debug $xml    
 
 $failedEventsGroup = Get-WinEvent -FilterXml $xml | group id | sort count -desc | Where-Object { 
     $_.count -gt 5 
 } 
 
+$attachments = @()
+
 foreach ( $group in $failedEventsGroup )
 {
-    <# $($group.Name)
-    
+    # filter 10 or more audit failures but exclude event id 4662 for more reasearch 
+    if ( ($($group.Name) -ne 4662) -and ($($group.Count) -gt 10) )
+    {
 
-    
-    # loop through each event in the group
-    $group.group | ForEach-Object {
-        $eventXml = [xml]$_.ToXml() 
+    # create string builder object to store each events information
+    # export string builder to CSV file
 
-        "`r`nSTART OF EVENT`r`n"
-        $eventXml.Event.System
-        $eventXml.Event.EventData.Data
-        "`r`nEND OF EVENT`r`n" 
+    # note $start in UTC, export events to CSV and compile file paths of attachments
+    $attachments += $(Export-EventsToCsv -reportDate $start -events $($group.Group))
     }
-     "`r`nEND OF GROUP`r`n" #>
-
-     # start with EventID 4625: Failed login, account lockout
-     if ( $($group.Name) -eq 4625 )
-     {
-        # create string builder object to store each events information
-        # export string builder to CSV file
-
-        # note $start in UTC
-        Export-EventsToCsv -reportDate $start -events $($group.Group)
+    else
+    {
+    Write-Host "The event group EventID:$($group.Name) is not included in critical events to monitor. No action required." -ForegroundColor Yellow
+    }
     
-     }
-     else
-     {
-        Write-Host "The event group EventID:$($group.Name) is not included in critical events to monitor. No action required." -ForegroundColor Yellow
-     }
-    
-    "`r`nEND OF Group`r`n"
-
-
-    # add to list of CSVs
+    # END OF Group 
 }
 
-# send alert to SystemsAdmin and attach all CSVs
+# send alert to SystemsAdmin and attach all CSVs 
 
-
+sendMailAlert -subject "Audit failure report" -body "Audit failures in the past 15-minutes." -attachments $attachments
 Write-Debug $("Duration: {0} seconds" -f $(($timer.ElapsedMilliseconds)/1000))
 Write-Debug "`r`n"
 
 # set the current value of $end to next loop's $start
-$start = $end
+# $start = $end
 Write-Debug $("Next loop's SearchStartDateTime '{0}'" -f $start.ToString("yyyy-MM-ddTHH:mm:ss.fffZ"))
 Write-Debug $("Next loop's SearchEndDateTime '{0}'" -f $start.AddMilliseconds($searchRangeMilliseconds).ToString("yyyy-MM-ddTHH:mm:ss.fffZ"))
 Write-Debug "`r`n"
@@ -283,5 +266,4 @@ $timer.Stop()
 $timerElapsedMilliseconds = $($timer.ElapsedMilliseconds)
 
 # $sleepDurationMinutes = $(($searchRangeMilliseconds - $timerElapsedMilliseconds)/60000)
-
-# Add-ProgressBar -sleepDurationMinutes $sleepDurationMinutes
+# Add-ProgressBar -sleepDurationMinutes $sleepDurationMinute
