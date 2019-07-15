@@ -31,10 +31,10 @@ function sendMailAlert {
 #region Get-FailedEvents
 function Get-FailedEvents {
     [CmdletBinding()]
-    param($ms,$searchRangeMinutes)
+    param($ms, $xml, $searchRangeMinutes)
 
-    <#
-    Task: Search for failed events in the past 15 minutes)
+    #region task details
+    <# Task: Search for failed events in the past 15 minutes)
 
     Workflow:
 
@@ -56,31 +56,9 @@ function Get-FailedEvents {
             TimeCreated[timediff(@SystemTime) &lt;=" + $ms + "]]]</Select>
             <Suppress Path='ForwardedEvents'>*[System[(EventID=5447)]]</Suppress>
           </Query>
-        </QueryList>"
-    #>
-
-    # duration in milliseconds to search for events
-    # $ms = $(New-TimeSpan -Minutes 60).TotalMilliseconds # events in the past 1-hour(s)
-
-    ################################
-    ######   set xml filter   ######
-    ################################
+        </QueryList>" #>
+    #endregion
     
-
-    $xml = @"
-    <QueryList>
-      <Query Id='0' Path='ForwardedEvents'>
-        <Select Path='ForwardedEvents'>
-          *[
-            System[
-              band(Keywords,4503599627370496) and TimeCreated[timediff(@SystemTime) &lt;=$ms]
-            ]
-          ]
-        </Select>
-      </Query>
-    </QueryList>
-"@
-
     ####################################################
     ### is the ForwardedEvents log recently archived ###
     ####################################################
@@ -89,8 +67,11 @@ function Get-FailedEvents {
     $lastArchivedLog = Get-ChildItem -Filter "Archive-ForwardedEvents*.evtx" -Path $searchPath | Select -Last 1
     $lastArchivedLogLastWriteTime = $lastArchivedLog.LastWriteTime
 
-    # $xpath = "*[System[TimeCreated[timediff(@SystemTime) <= $ms] and band(Keywords,4503599627370496)]]"
-    # $xpath = "*[System[EventID=4625] and EventData[Data[@Name='WorkstationName']='RDI-US-LP1537']]"
+    <# examples:
+        $xpath = "*[System[TimeCreated[timediff(@SystemTime) <= $ms] and band(Keywords,4503599627370496)]]"
+        $xpath = "*[System[EventID=4625] and EventData[Data[@Name='WorkstationName']='RDI-US-LP1537']]" 
+    #>
+
     $xpath = "*[System[TimeCreated[timediff(@SystemTime) <= $ms] and band(Keywords,4503599627370496)]]"
 
     if ( $lastArchivedLogLastWriteTime -ge $((Get-Date).AddMinutes(-$searchRangeMinutes)) )
@@ -104,7 +85,6 @@ function Get-FailedEvents {
     else
     {
         # get failed events from the ForwardedEvents log instead
-
         Write-Host "Search for failed events from ForwardedEvents log." -ForegroundColor Yellow
 
         # add previously archived log event to ForwardeEvents events
@@ -257,30 +237,45 @@ function Export-EvensToCsv
 # script execution starts here #
 ################################
 
-$searchRangeMinutes = 30 # $(0.25*60)
-$searchRangeMilliSeconds = $(New-TimeSpan -Minutes $searchRangeMinutes).TotalMilliseconds
-"Search Range (min): {0:n0}" -f $($searchRangeMilliSeconds / 60000)
-
 # Clear-Host
 
-do
-{
+$searchRangeMinutes = 30 # search range in minutes
+$searchRangeMilliSeconds = $(New-TimeSpan -Minutes $searchRangeMinutes).TotalMilliseconds
+"Search Range (min): {0:n0}" -f $($searchRangeMilliSeconds / 60000)
+ 
+$xml = @"
+<QueryList>
+    <Query Id='0' Path='ForwardedEvents'>
+    <Select Path='ForwardedEvents'>
+        *[
+        System[
+            band(Keywords,4503599627370496) and TimeCreated[timediff(@SystemTime) &lt;=$searchRangeMilliSeconds]
+        ]
+        ]
+    </Select>
+    </Query>
+</QueryList>
+"@ 
+
+
+do {
     $reportDate = Get-Date
     $reportDate
 
     $timer = New-Object System.Diagnostics.Stopwatch
     $timer.Start()
 
-    $failedEventGroups = Get-FailedEvents -ms $searchRangeMilliSeconds -searchRangeMinutes $searchRangeMinutes | group id | sort count -Descending
+    $failedEvents = Get-FailedEvents -ms $searchRangeMilliSeconds -xml $xml -searchRangeMinutes $searchRangeMinutes
 
     $timer.Stop()
     "Elapsed Seconds: {0:n2}" -f $(($timer.ElapsedMilliseconds) / 1000)
 
-    $failedEventGroups | Where-Object { $_.Group.Count -ge 10 } `
-    | ForEach-Object {
+    # exclude groups with 9 or less failed events
+    $failedEvents | group id | sort count -desc | Where-Object { $_.Count -ge 10 } | Format-Table -auto
+    <# | ForEach-Object {
         $_.Group | ft -auto
-        Export-EvensToCsv -reportDate $reportDate -events $_.Group
-    }
+        #Export-EvensToCsv -reportDate $reportDate -events $_.Group
+    } #>
 
     <#
     $failedEventGroups | ft count,name
@@ -297,19 +292,18 @@ do
     }
     #>
 
-    $sleepSeconds = $((New-TimeSpan -Minutes $($searchRangeMinutes - 29)).TotalSeconds) - 14.5
+    # pause execution by 1/6 of $searchRangeMinutes (5 min)
+    # with a search overlap of 25 minutes
+    $sleepSeconds = $($searchRangeMilliSeconds/1000/6)
 
-    Write-Host "Pause for $($sleepSeconds/60) minutes`r`n" -ForegroundColor Red
+    Write-Host ("Pause for {0} minutes, please wait...`r`n" -f $($sleepSeconds/60)) -ForegroundColor Yellow
+    # Write-Host "Pause for $($sleepSeconds/60) minutes`r`n" -ForegroundColor Red
     Start-Sleep -Seconds $sleepSeconds # pause for 1-minute
 } while( $true )
 
-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
-
-
-
-
 Pop-Location
 
+#region hide
 <#
 Name                      #text          
 ----                      -----          
@@ -333,7 +327,8 @@ KeyLength                 0
 ProcessId                 0x0            
 ProcessName               -              
 IpAddress                 10.0.0.1       
-IpPort                    49170  
-#>
+IpPort                    49170 
+#> 
+#endregion hide
 
 
