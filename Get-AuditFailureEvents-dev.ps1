@@ -151,7 +151,7 @@ If ($PSBoundParameters['Debug']) {
         {
             $MailMessage = @{
                 From = "securityAlert@landesa.org"
-                To = "alexo@landesa.org"
+                To = "Landesa Global IT Team <Landesa_GBL_IT@rdiland.org>"
                 Subject = $subject
                 Body = $body
                 SmtpServer = "10.0.0.10"
@@ -251,8 +251,9 @@ $xml = @"
 Write-Debug $xml    
 
 # exclude event ids (5447, 4662, 4674) and filter with less than 11 events
+# too much events 4768, and 4776
 $failedEventsGroup = Get-WinEvent -FilterXml $xml | group id | Where-Object { 
-    ($_.name -ne 5447 -and $_.name -ne 4662 -and $_.name -ne 4674) -and $_.count -gt 10
+    ($_.name -ne 5447 -and $_.name -ne 4662 -and $_.name -ne 4674) -and $_.count -gt 20
 } | sort count -Descending
 
 $failedEventsGroup | ft -auto
@@ -274,7 +275,8 @@ if ( $failedEventsGroup.Count -ge 1)
 }
 else
 {
-    Write-Host "No audit failure events match report criteria."
+    # Write-Host "No audit failure events match report criteria."
+    sendMailAlert -subject "AUDIT FAILURE" -body "No audit failure events match report criteria in the past 15-minutes."
 }
 
 Write-Debug $("Duration: {0} seconds" -f $(($timer.ElapsedMilliseconds)/1000))

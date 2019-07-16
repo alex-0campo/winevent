@@ -151,7 +151,7 @@ If ($PSBoundParameters['Debug']) {
         {
             $MailMessage = @{
                 From = "securityAlert@landesa.org"
-                To = "alexo@landesa.org"
+                To = "Landesa Global IT Team <Landesa_GBL_IT@rdiland.org>"
                 Subject = $subject
                 Body = $body
                 SmtpServer = "10.0.0.10"
@@ -274,7 +274,8 @@ if ( $failedEventsGroup.Count -ge 1)
 }
 else
 {
-    Write-Host "No audit failure events match report criteria."
+    # Write-Host "No audit failure events match report criteria."
+    sendMailAlert -subject "AUDIT FAILURE" -body "No audit failure events match report criteria in the past 15-minutes."
 }
 
 Write-Debug $("Duration: {0} seconds" -f $(($timer.ElapsedMilliseconds)/1000))
