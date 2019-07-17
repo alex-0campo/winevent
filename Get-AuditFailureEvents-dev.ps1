@@ -5,6 +5,67 @@ If ($PSBoundParameters['Debug']) {
     $DebugPreference = 'Continue'
 } 
 
+Push-Location
+
+
+
+Clear-Host
+
+# determine the current script's location (file path)
+# $ScriptDir = Split-Path $script:MyInvocation.MyCommand.Path
+
+# test if file with last run's date and time stamp
+$flag = "$ScriptDir\lastrun.txt"
+
+Clear-Host
+do {
+Get-Date
+# if .\lastrun.txt file does not exist
+if ( !$(Test-Path -Path $flag) )
+{
+    Write-Host "`r`nThe file $flag not found..." 
+    Write-Host "Create missing file and set value to current date..." -ForegroundColor Green
+    New-Item -Path $flag -Value $(Get-Date) | Out-Null
+
+    # more tasks here
+    Write-Host "Do more tasks here..." -ForegroundColor Magenta
+}
+else
+{
+    Write-Host "  The file $flag exists..."   
+    Write-Host "  Do more tests here..." -ForegroundColor Green
+
+    # is last run date time (n) minutes in the past?
+    if ($(New-TimeSpan -Start $(Get-Date $(Get-Content -Path $flag)) -End $(Get-Date)).TotalHours -ge 0.05 )
+    {
+        Write-Host "  Last run date time is more than (n) hours ago..." -ForegroundColor Green
+
+        Write-Host "  Do more stuff here..." -ForegroundColor Green
+
+        # update $flag last run time value
+        Write-Host "  Create a new file and set value to current date..." -ForegroundColor Green
+        New-Item -Path $flag -Value $(Get-Date) -Force | Out-Null
+
+        # repeat more tasks here
+        Write-Host "  Repeat more tasks here..." -ForegroundColor Magenta
+    }
+    else 
+    {
+        # skip for tasks for the next (n) hours.
+        Write-Host "  $(Get-Date)`r`n  Do nothing in the next (n) hours..." -ForegroundColor Yellow
+    }
+}
+
+# simulate run every 5 minutes
+Write-Host "`r`n  Pause tasks for (n) minutes,`r`n  Please wait...`r`n" -ForegroundColor Yellow
+Start-Sleep -Seconds 60
+} while ( $true )
+
+
+ 
+
+# Set-Location
+
 #region functions
 
     #region Export-EventsToCsv
@@ -151,8 +212,8 @@ If ($PSBoundParameters['Debug']) {
         {
             $MailMessage = @{
                 From = "securityAlert@landesa.org"
-                To = "Landesa Global IT Team <Landesa_GBL_IT@rdiland.org>"
-                Subject = $subject
+                To = "Alex Ocampo <alexo@landesa.org>" # "Landesa Global IT Team <Landesa_GBL_IT@rdiland.org>"
+                Subject = "Dev-Test: " + $subject
                 Body = $body
                 SmtpServer = "10.0.0.10"
                 Attachments = $attachments
@@ -162,7 +223,7 @@ If ($PSBoundParameters['Debug']) {
         {
             $MailMessage = @{
                 From = "securityAlert@landesa.org"
-                To = "alexo@landesa.org"
+                To = "Alex Ocampo <alexo@landesa.org>"
                 Subject = $subject
                 Body = $body
                 SmtpServer = "10.0.0.10"
@@ -204,9 +265,21 @@ Clear-Host
         TimeCreated[timediff(@SystemTime) &lt;=" + $ms + "]]]</Select>
         <Suppress Path='ForwardedEvents'>*[System[(EventID=5447)]]</Suppress>
         </Query>
-    </QueryList>" #>
+    </QueryList>" 
+    
+    3. Control (temporary) email sent until a solution to block inactive India staff
+       from requesting Kerberos authentication ticket (TGT).
+    4. Send event id count, plus any other valuable information on the email alert
+    
+    #> 
 
 #endregion
+
+<#################################################################### 
+India inactive staff requesting Kerberos authentication ticket (TGT),
+causing excessive audit failures. Temporarily control the frequency
+of email alerts for event id 4768.
+####################################################################>
 
 # search for failed events in the past 15 minutes ran at 15-minutes (no overlap monitoring)
 # set task duration for 15-minutes or other duration in minutes
