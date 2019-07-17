@@ -1,19 +1,19 @@
 ﻿[CmdletBinding()]
 param()
 
+Clear-Host
+
 If ($PSBoundParameters['Debug']) {
     $DebugPreference = 'Continue'
 } 
 
-Push-Location
-
-
-
-Clear-Host
-
 # determine the current script's location (file path)
-# $ScriptDir = Split-Path $script:MyInvocation.MyCommand.Path
+$ScriptDir = Split-Path $script:MyInvocation.MyCommand.Path
 
+Push-Location
+Set-Location $ScriptDir
+
+<#
 # test if file with last run's date and time stamp
 $flag = "$ScriptDir\lastrun.txt"
 
@@ -59,7 +59,7 @@ else
 # simulate run every 5 minutes
 Write-Host "`r`n  Pause tasks for (n) minutes,`r`n  Please wait...`r`n" -ForegroundColor Yellow
 Start-Sleep -Seconds 60
-} while ( $true )
+} while ( $true ) #>
 
 
  
