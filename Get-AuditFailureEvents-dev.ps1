@@ -61,11 +61,6 @@ Write-Host "`r`n  Pause tasks for (n) minutes,`r`n  Please wait...`r`n" -Foregro
 Start-Sleep -Seconds 60
 } while ( $true ) #>
 
-
- 
-
-# Set-Location
-
 #region functions
 
     #region Export-EventsToCsv
@@ -236,11 +231,15 @@ Start-Sleep -Seconds 60
 
 #endregion functions
 
+# simulate execution every 15 minutes
+
+do {
+
+Get-Date
+
 #################################
 #  script execution starts here #
 #################################
-
-Clear-Host
 
 #region task details
     <# Task: Search for failed events in the past 15 minutes)
@@ -274,12 +273,6 @@ Clear-Host
     #> 
 
 #endregion
-
-<#################################################################### 
-India inactive staff requesting Kerberos authentication ticket (TGT),
-causing excessive audit failures. Temporarily control the frequency
-of email alerts for event id 4768.
-####################################################################>
 
 # search for failed events in the past 15 minutes ran at 15-minutes (no overlap monitoring)
 # set task duration for 15-minutes or other duration in minutes
@@ -321,13 +314,147 @@ $xml = @"
 </QueryList>
 "@
 
-Write-Debug $xml    
+Write-Debug $xml   
 
-# exclude event ids (5447, 4662, 4674) and filter with less than 11 events
-# too much events 4768, and 4776
-$failedEventsGroup = Get-WinEvent -FilterXml $xml | group id | Where-Object { 
-    ($_.name -ne 5447 -and $_.name -ne 4662 -and $_.name -ne 4674) -and $_.count -gt 20
-} | sort count -Descending
+
+<#################################################################### 
+India inactive staff requesting Kerberos authentication ticket (TGT),
+causing excessive audit failures. Temporarily control the frequency
+of email alerts for event id 4768.
+####################################################################>
+
+#region conditional poc
+<#
+# test if file with last run's date and time stamp
+$flag = "$ScriptDir\lastrun.txt"
+
+Clear-Host
+do {
+Get-Date
+# if .\lastrun.txt file does not exist
+if ( !$(Test-Path -Path $flag) )
+{
+    Write-Host "`r`nThe file $flag not found..." 
+    Write-Host "Create missing file and set value to current date..." -ForegroundColor Green
+    New-Item -Path $flag -Value $(Get-Date) | Out-Null
+
+    # more tasks here
+    Write-Host "Do more tasks here..." -ForegroundColor Magenta
+}
+else
+{
+    Write-Host "  The file $flag exists..."   
+    Write-Host "  Do more tests here..." -ForegroundColor Green
+
+    # is last run date time (n) minutes in the past?
+    if ($(New-TimeSpan -Start $(Get-Date $(Get-Content -Path $flag)) -End $(Get-Date)).TotalHours -ge 0.05 )
+    {
+        Write-Host "  Last run date time is more than (n) hours ago..." -ForegroundColor Green
+
+        Write-Host "  Do more stuff here..." -ForegroundColor Green
+
+        # update $flag last run time value
+        Write-Host "  Create a new file and set value to current date..." -ForegroundColor Green
+        New-Item -Path $flag -Value $(Get-Date) -Force | Out-Null
+
+        # repeat more tasks here
+        Write-Host "  Repeat more tasks here..." -ForegroundColor Magenta
+    }
+    else 
+    {
+        # skip for tasks for the next (n) hours.
+        Write-Host "  $(Get-Date)`r`n  Do nothing in the next (n) hours..." -ForegroundColor Yellow
+    }
+}
+
+# simulate run every 5 minutes
+Write-Host "`r`n  Pause tasks for (n) minutes,`r`n  Please wait...`r`n" -ForegroundColor Yellow
+Start-Sleep -Seconds 60
+} while ( $true ) #>
+#endregion conditional poc
+
+$flag = "$ScriptDir\lastrun-4768.txt"
+
+#############################
+$skipDuration = 3 # (n) hours
+$sleepDuration = 900 # (n) seconds
+$eventCountThreshold = 10
+#############################
+
+# is this the script's first run?
+# test if file does not exist, create a new file with current's date and time
+
+if ( !$(Test-Path -Path $flag) )
+{
+    Write-Host "`r`nThe file $flag not found..." -ForegroundColor Red
+    Write-Host "Create missing file and set value to current date..." -ForegroundColor Red
+    New-Item -Path $flag -Value $(Get-Date) | Out-Null
+
+    ###########################################################
+
+    # run initial tasks here...
+    Write-Host "Get failed events here excluding events 5447, 4662, and 4674..." -ForegroundColor Red
+    
+    # exclude event ids (5447, 4662, 4674) and filter with less than 11 events
+    # too much events 4768, and 4776
+    $failedEventsGroup = Get-WinEvent -FilterXml $xml | group id | Where-Object { 
+        ($_.name -ne 5447 -and $_.name -ne 4662 -and $_.name -ne 4674) -and $_.count -gt $eventCountThreshold
+    } | sort count -Descending
+
+    ###########################################################    
+}
+else
+{
+    # $flag file exists; therefore not the initial run of the script
+    # run more test to meet alternate tasks (Get failed event groups excluding
+    # initial event ids plus event id 4768
+
+    Write-Host "The file $flag exists..." -ForegroundColor Green  
+    Write-Host "Do more tests here..." -ForegroundColor Green
+
+    # is last run date time (n) minutes in the past?
+    if ($(New-TimeSpan -Start $(Get-Date $(Get-Content -Path $flag)) -End $(Get-Date)).TotalHours -ge $skipDuration )
+    {
+        Write-Host "  Last run date time is more than ($skipDuration) hours ago..." -ForegroundColor Green
+        Write-Host "  Rerun initial tasks here..." -ForegroundColor Green
+
+        #########################################################
+        # rerun initial tasks but exclude event id 4768 here... #
+
+        $failedEventsGroup = Get-WinEvent -FilterXml $xml | group id | Where-Object { 
+            ( $_.name -ne 5447 -and $_.name -ne 4662 -and $_.name -ne 4674 ) -and $_.count -gt $eventCountThreshold
+        } | sort count -Descending
+
+        #########################################################
+
+        # update $flag last run time value
+        Write-Host "  Create a new file and set value to current date..." -ForegroundColor Green
+        New-Item -Path $flag -Value $(Get-Date) -Force | Out-Null
+
+        # repeat more tasks here
+        # Write-Host "  Repeat more tasks here..." -ForegroundColor Magenta
+    }
+    else 
+    {
+        # skip for tasks for the next (n) hours.
+        # Write-Host "  $(Get-Date)`r`n  Do nothing in the next ($skipDuration) hours..." -ForegroundColor Yellow
+
+        Write-Host "  Rerun initial tasks but exclude event id 4768 here......" -ForegroundColor Green
+
+        #########################################################
+        # rerun initial tasks but exclude event id 4768 here... #
+
+        $failedEventsGroup = Get-WinEvent -FilterXml $xml | group id | Where-Object { 
+            ( $_.name -ne 5447 -and $_.name -ne 4662 -and $_.name -ne 4674 -and $_.name -ne 4768 ) -and $_.count -gt $eventCountThreshold
+        } | sort count -Descending
+
+        #########################################################
+    }
+}
+
+
+
+######################## old code no changes from here ########################
 
 $failedEventsGroup | ft -auto
 
@@ -335,21 +462,21 @@ $attachments = @()
 
 foreach ( $group in $failedEventsGroup )
 {
-    
+    # export each group of events to CSV and add the filename to attachments (array)
     $attachments += $(Export-EventsToCsv -reportDate $start -events $($group.Group))
      
 }
 
 # send alert to SystemsAdmin and attach all CSVs 
 # skip sendMailAlert if there is no $failedEventsGroup to report
-if ( $failedEventsGroup.Count -ge 1)
+if ( $($attachments.Length) -ge 1)
 {
     sendMailAlert -subject "AUDIT FAILURE" -body "There are audit failures reported in the past 15-minutes.<br />See attachments for details." -attachments $attachments
 }
 else
 {
-    # Write-Host "No audit failure events match report criteria."
-    sendMailAlert -subject "AUDIT FAILURE" -body "No audit failure events match report criteria in the past 15-minutes."
+    Write-Host "`r`n  No `$failedEventsGroup with events reported exceeding ($eventCountThreshold)."
+    # sendMailAlert -subject "AUDIT FAILURE" -body "No audit failure events match report criteria in the past 15-minutes."
 }
 
 Write-Debug $("Duration: {0} seconds" -f $(($timer.ElapsedMilliseconds)/1000))
@@ -363,7 +490,17 @@ Write-Debug "`r`n"
 Write-Debug $("Next loop will start at '{0}'" -f $start.AddMilliseconds($searchRangeMilliseconds).ToString("yyyy-MM-ddTHH:mm:ss.fffZ"))
 
 $timer.Stop()
-$timerElapsedMilliseconds = $($timer.ElapsedMilliseconds)
+# $timerElapsedMilliseconds = $($timer.ElapsedMilliseconds)
+
+"`r`n  Duration: {0} (ElapsedSeconds)" -f $(($timer.ElapsedMilliseconds)/1000)
 
 # $sleepDurationMinutes = $(($searchRangeMilliseconds - $timerElapsedMilliseconds)/60000)
 # Add-ProgressBar -sleepDurationMinutes $sleepDurationMinute
+
+# set $failedEventsGroup variable to $null
+$failedEventsGroup = $null
+
+Write-Host "`r`n  End of do/while loop; pause for $($sleepDuration/60) minute(s),`r`n  Please wait...`r`n" -ForegroundColor Yellow
+Start-Sleep -Seconds $sleepDuration
+
+} while ( $true ) # end of do loop
