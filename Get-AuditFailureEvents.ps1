@@ -1,9 +1,17 @@
 ﻿[CmdletBinding()]
 param()
 
+Clear-Host
+
 If ($PSBoundParameters['Debug']) {
     $DebugPreference = 'Continue'
 } 
+
+# determine the current script's location (file path)
+$ScriptDir = Split-Path $script:MyInvocation.MyCommand.Path
+
+Push-Location
+Set-Location $ScriptDir
 
 #region functions
 
@@ -162,7 +170,7 @@ If ($PSBoundParameters['Debug']) {
         {
             $MailMessage = @{
                 From = "securityAlert@landesa.org"
-                To = "alexo@landesa.org"
+                To = "Landesa Global IT Team <Landesa_GBL_IT@rdiland.org>"
                 Subject = $subject
                 Body = $body
                 SmtpServer = "10.0.0.10"
@@ -175,11 +183,15 @@ If ($PSBoundParameters['Debug']) {
 
 #endregion functions
 
+# simulate execution every 15 minutes
+
+# do {
+
+Get-Date
+
 #################################
 #  script execution starts here #
 #################################
-
-Clear-Host
 
 #region task details
     <# Task: Search for failed events in the past 15 minutes)
@@ -204,7 +216,13 @@ Clear-Host
         TimeCreated[timediff(@SystemTime) &lt;=" + $ms + "]]]</Select>
         <Suppress Path='ForwardedEvents'>*[System[(EventID=5447)]]</Suppress>
         </Query>
-    </QueryList>" #>
+    </QueryList>" 
+    
+    3. Control (temporary) email sent until a solution to block inactive India staff
+       from requesting Kerberos authentication ticket (TGT).
+    4. Send event id count, plus any other valuable information on the email alert
+    
+    #> 
 
 #endregion
 
@@ -248,12 +266,95 @@ $xml = @"
 </QueryList>
 "@
 
-Write-Debug $xml    
+Write-Debug $xml   
 
-# exclude event ids (5447, 4662, 4674) and filter with less than 11 events
-$failedEventsGroup = Get-WinEvent -FilterXml $xml | group id | Where-Object { 
-    ($_.name -ne 5447 -and $_.name -ne 4662 -and $_.name -ne 4674) -and $_.count -gt 10
-} | sort count -Descending
+
+<#################################################################### 
+India inactive staff requesting Kerberos authentication ticket (TGT),
+causing excessive audit failures. Temporarily control the frequency
+of email alerts for event id 4768.
+####################################################################>
+
+$flag = "$ScriptDir\lastrun-4768.txt"
+
+#############################
+$skipDuration = 3 # (n) hours
+$sleepDuration = 900 # (n) seconds
+$eventCountThreshold = 5
+#############################
+
+# is this the script's first run?
+# test if file does not exist, create a new file with current's date and time
+
+if ( !$(Test-Path -Path $flag) )
+{
+    Write-Debug "`r`nThe file $flag not found..." # -ForegroundColor Red
+    Write-Debug "Create missing file and set value to current date..." # -ForegroundColor Red
+    New-Item -Path $flag -Value $(Get-Date) | Out-Null
+
+    ###########################################################
+
+    # run initial tasks here...
+    Write-Debug "Get failed events here excluding events 5447, 4662, and 4674..." # -ForegroundColor Red
+    
+    # exclude event ids (5447, 4662, 4674) and filter with less than 11 events
+    # too much events 4768, and 4776
+    $failedEventsGroup = Get-WinEvent -FilterXml $xml | group id | Where-Object { 
+        ($_.name -ne 5447 -and $_.name -ne 4662 -and $_.name -ne 4674) -and $_.count -gt $eventCountThreshold
+    } | sort count -Descending
+
+    ###########################################################    
+}
+else
+{
+    # $flag file exists; therefore not the initial run of the script
+    # run more test to meet alternate tasks (Get failed event groups excluding
+    # initial event ids plus event id 4768
+
+    Write-Debug "The file $flag exists..." # -ForegroundColor Green  
+    Write-Debug "Do more tests here..." # -ForegroundColor Green
+
+    # is last run date time (n) minutes in the past?
+    if ($(New-TimeSpan -Start $(Get-Date $(Get-Content -Path $flag)) -End $(Get-Date)).TotalHours -ge $skipDuration )
+    {
+        Write-Debug "  Last run date time is more than ($skipDuration) hours ago..." # -ForegroundColor Green
+        Write-Debug "  Rerun initial tasks here..." # -ForegroundColor Green
+
+        #########################################################
+        # rerun initial tasks but exclude event id 4768 here... #
+
+        $failedEventsGroup = Get-WinEvent -FilterXml $xml | group id | Where-Object { 
+            ( $_.name -ne 5447 -and $_.name -ne 4662 -and $_.name -ne 4674 ) -and $_.count -gt $eventCountThreshold
+        } | sort count -Descending
+
+        #########################################################
+
+        # update $flag last run time value
+        Write-Debug "  Create a new file and set value to current date..." # -ForegroundColor Green
+        New-Item -Path $flag -Value $(Get-Date) -Force | Out-Null
+
+        # repeat more tasks here
+        # Write-Host "  Repeat more tasks here..." -ForegroundColor Magenta
+    }
+    else 
+    {
+        # skip for tasks for the next (n) hours.
+        # Write-Host "  $(Get-Date)`r`n  Do nothing in the next ($skipDuration) hours..." -ForegroundColor Yellow
+
+        Write-Debug "  Rerun initial tasks but exclude event id 4768 here......" # -ForegroundColor Green
+
+        #########################################################
+        # rerun initial tasks but exclude event id 4768 here... #
+
+        $failedEventsGroup = Get-WinEvent -FilterXml $xml | group id | Where-Object { 
+            ( $_.name -ne 5447 -and $_.name -ne 4662 -and $_.name -ne 4674 -and $_.name -ne 4768 ) -and $_.count -gt $eventCountThreshold
+        } | sort count -Descending
+
+        #########################################################
+    }
+}
+
+######################## old code no changes from here ########################
 
 $failedEventsGroup | ft -auto
 
@@ -261,21 +362,21 @@ $attachments = @()
 
 foreach ( $group in $failedEventsGroup )
 {
-    
+    # export each group of events to CSV and add the filename to attachments (array)
     $attachments += $(Export-EventsToCsv -reportDate $start -events $($group.Group))
      
 }
 
 # send alert to SystemsAdmin and attach all CSVs 
 # skip sendMailAlert if there is no $failedEventsGroup to report
-if ( $failedEventsGroup.Count -ge 1)
+if ( $($attachments.Length) -ge 1)
 {
     sendMailAlert -subject "AUDIT FAILURE" -body "There are audit failures reported in the past 15-minutes.<br />See attachments for details." -attachments $attachments
 }
 else
 {
-    # Write-Host "No audit failure events match report criteria."
-    sendMailAlert -subject "AUDIT FAILURE" -body "No audit failure events match report criteria in the past 15-minutes."
+    Write-Debug "`r`n  No `$failedEventsGroup with events reported exceeding ($eventCountThreshold)."
+    # sendMailAlert -subject "AUDIT FAILURE" -body "No audit failure events match report criteria in the past 15-minutes."
 }
 
 Write-Debug $("Duration: {0} seconds" -f $(($timer.ElapsedMilliseconds)/1000))
@@ -289,7 +390,9 @@ Write-Debug "`r`n"
 Write-Debug $("Next loop will start at '{0}'" -f $start.AddMilliseconds($searchRangeMilliseconds).ToString("yyyy-MM-ddTHH:mm:ss.fffZ"))
 
 $timer.Stop()
-$timerElapsedMilliseconds = $($timer.ElapsedMilliseconds)
+# $timerElapsedMilliseconds = $($timer.ElapsedMilliseconds)
 
-# $sleepDurationMinutes = $(($searchRangeMilliseconds - $timerElapsedMilliseconds)/60000)
-# Add-ProgressBar -sleepDurationMinutes $sleepDurationMinute
+"`r`n  Duration: {0} (ElapsedSeconds)" -f $(($timer.ElapsedMilliseconds)/1000)
+
+# set $failedEventsGroup variable to $null
+$failedEventsGroup = $null
