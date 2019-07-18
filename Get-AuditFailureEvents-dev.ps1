@@ -378,7 +378,7 @@ $flag = "$ScriptDir\lastrun-4768.txt"
 #############################
 $skipDuration = 3 # (n) hours
 $sleepDuration = 900 # (n) seconds
-$eventCountThreshold = 10
+$eventCountThreshold = 5
 #############################
 
 # is this the script's first run?
