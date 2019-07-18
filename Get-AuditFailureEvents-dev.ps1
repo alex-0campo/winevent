@@ -218,7 +218,7 @@ Start-Sleep -Seconds 60
         {
             $MailMessage = @{
                 From = "securityAlert@landesa.org"
-                To = "Alex Ocampo <alexo@landesa.org>"
+                To = "Alex Ocampo <alexo@landesa.org>" # "Landesa Global IT Team <Landesa_GBL_IT@rdiland.org>"
                 Subject = $subject
                 Body = $body
                 SmtpServer = "10.0.0.10"
@@ -266,17 +266,22 @@ Get-Date
         </Query>
     </QueryList>" 
     
-    3. Control (temporary) email sent until a solution to block inactive India staff
-       from requesting Kerberos authentication ticket (TGT).
+    3. Skipped monitoring event 4768 every 6- hours. - Control (temporary) email sent
+       until a solution to block inactive India staff from requesting Kerberos 
+       authentication ticket (TGT).
     4. Send event id count, plus any other valuable information on the email alert
+
+    5. Group by EventID then (inspect) and group by computer or user object.
     
     #> 
 
 #endregion
 
-# search for failed events in the past 15 minutes ran at 15-minutes (no overlap monitoring)
-# set task duration for 15-minutes or other duration in minutes
-$searchRangeMilliseconds = $(New-TimeSpan -Minutes 30).TotalMilliseconds
+# search for failed events in the past 16 minutes scheduled to run every 15 minutes 
+# overlapping by 1-minute from last run to take run time into consideration.
+
+# set task duration for 16-minutes or other duration in minutes
+$searchRangeMilliseconds = $(New-TimeSpan -Minutes 16).TotalMilliseconds
 
 # Using local time did not work, UTC worked
 $start = $((Get-Date).AddMilliseconds(-$searchRangeMilliseconds).ToUniversalTime()) 
@@ -373,12 +378,11 @@ Start-Sleep -Seconds 60
 } while ( $true ) #>
 #endregion conditional poc
 
-$flag = "$ScriptDir\lastrun-4768.txt"
-
 #############################
-$skipDuration = 3 # (n) hours
+$flag = "$ScriptDir\lastrun-4768.txt"
+$skipDuration = 6 # skip monitoring event id 4768 for 6-hours
 $sleepDuration = 900 # (n) seconds
-$eventCountThreshold = 5
+$eventCountThreshold = 10 # bump 5 to 10
 #############################
 
 # is this the script's first run?
