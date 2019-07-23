@@ -4,7 +4,7 @@ param(
     [string[]]$suppressEvents = @(5447, 4662, 4674, 4768, 4776)
 )
 
-Clear-Host
+# Clear-Host
 
 If ($PSBoundParameters['Debug']) {
     $DebugPreference = 'Continue'
@@ -184,14 +184,15 @@ $ScriptDir = Split-Path $script:MyInvocation.MyCommand.Path
 Write-Host "`r`n`r`n`r`n"
 # simulate execution every 15 minutes
 do {
-# Get-Date
-# "`r`n"
+    
+    # Get-Date
+    # "`r`n"
 
-#################################
-#  script execution starts here #
-#################################
+    #################################
+    #  script execution starts here #
+    #################################
 
-#region task details
+    #region task details
     <# Task: Search for failed events in the past 15 minutes)
 
     Workflow:
@@ -225,261 +226,158 @@ do {
     
     #> 
 
-#endregion
+    #endregion task details
 
-#region hide
-# search for failed events in the past 16 minutes scheduled to run every 15 minutes 
-# overlapping by 1-minute from last run to take run time into consideration.
+    #region hide
+    # search for failed events in the past 16 minutes scheduled to run every 15 minutes 
+    # overlapping by 1-minute from last run to take run time into consideration.
 
-# set task duration for 16-minutes or other duration in minutes
-$searchRangeMinutes = 16
-$searchRangeMilliseconds = $(New-TimeSpan -Minutes $searchRangeMinutes).TotalMilliseconds
+    #########################################################################################
+    #####         set task duration for 16-minutes or other duration in minutes         #####
+    #########################################################################################
+    $searchRangeMinutes = 241
+    $searchRangeMilliseconds = $(New-TimeSpan -Minutes $searchRangeMinutes).TotalMilliseconds
 
-# Using local time did not work, UTC worked
-$start = $((Get-Date).AddMilliseconds(-$searchRangeMilliseconds).ToUniversalTime()) 
+    # $flag = "$ScriptDir\lastrun-4768.txt"
+    $skipDuration = 6 # skip monitoring event id 4768 for 6-hours
+    $sleepDuration = 900 # 900 # (n) seconds
+    $eventGroupCountThreshold = 10
+    $eventCountThreshold = 5 # bump 5 to 10
+    #########################################################################################
 
-### start timing execution ###
-"Report Range: {0} -to- {1}" -f $start.ToLocalTime(), $start.AddMinutes(16).ToLocalTime()
-"`r`n"
-$timer = New-Object System.Diagnostics.Stopwatch
-$timer.Start()
+    # Using local time did not work, UTC worked
+    $start = $((Get-Date).AddMilliseconds(-$searchRangeMilliseconds).ToUniversalTime()) 
+
+    ### start timing execution ###
+    "Report Range: {0} -to- {1}" -f $start.ToLocalTime(), $start.AddMinutes(16).ToLocalTime()
+    "`r`n"
+    $timer = New-Object System.Diagnostics.Stopwatch
+    $timer.Start()
     
-# current value of $start
-Write-Debug $("StartSearchDateTime '{0}'" -f $start.ToString("yyyy-MM-ddTHH:mm:ss.fffZ")) #.ToLocalTime())
+    # current value of $start
+    Write-Debug $("StartSearchDateTime '{0}'" -f $start.ToString("yyyy-MM-ddTHH:mm:ss.fffZ")) #.ToLocalTime())
 
-# set search range "TO datetime" 
-$end = $start.AddMilliseconds($searchRangeMilliseconds)
+    # set search range "TO datetime" 
+    $end = $start.AddMilliseconds($searchRangeMilliseconds)
 
-# current value of $end
-Write-Debug $("EndSearchDateTime '{0}'" -f $end.ToString("yyyy-MM-ddTHH:mm:ss.fffZ")) #.ToLocalTime())
-Write-Debug "`r`n"
+    # current value of $end
+    Write-Debug $("EndSearchDateTime '{0}'" -f $end.ToString("yyyy-MM-ddTHH:mm:ss.fffZ")) #.ToLocalTime())
+    Write-Debug "`r`n"
 
-# format start and end datetime for the xml filter    
-$strStart = "'" + $start.ToString("yyyy-MM-ddTHH:mm:ss.fffZ") + "'"
-$strEnd = "'" + $end.ToString("yyyy-MM-ddTHH:mm:ss.fffZ") + "'"
+    # format start and end datetime for the xml filter    
+    $strStart = "'" + $start.ToString("yyyy-MM-ddTHH:mm:ss.fffZ") + "'"
+    $strEnd = "'" + $end.ToString("yyyy-MM-ddTHH:mm:ss.fffZ") + "'"
 
 
-# set xml filter
+    # set xml filter
 
-# how to dynamically build xml filter excluding events based on passed parameter(s)
-# exclude event ids (5447, 4662, 4674, 4768, and 4776) and filter with less than 11 events
+    # how to dynamically build xml filter excluding events based on passed parameter(s)
+    # exclude event ids (5447, 4662, 4674, 4768, and 4776) and filter with less than 11 events
 
-$sb = New-Object -TypeName System.Text.StringBuilder
+    $sb = New-Object -TypeName System.Text.StringBuilder
 
-for ($i=0; $i -le $(($suppressEvents.Length)-1); $i++)
-{
-    if ( $i -lt $(($suppressEvents.Length)-1) )
+    for ($i=0; $i -le $(($suppressEvents.Length)-1); $i++)
     {
-        $sb.Append("EventID=" + $suppressEvents[$i] + " or ") | Out-Null
+        if ( $i -lt $(($suppressEvents.Length)-1) )
+        {
+            $sb.Append("EventID=" + $suppressEvents[$i] + " or ") | Out-Null
+        }
+        else
+        {
+            $sb.Append("EventID=" + $suppressEvents[$i]) | Out-Null
+        }    
+    }
+
+    $xml = @"
+    <QueryList>
+        <Query Id='0' Path='ForwardedEvents'>
+        <Select Path='ForwardedEvents'>
+            *[
+              System[band(Keywords,4503599627370496) 
+              and
+              (TimeCreated[@SystemTime&gt;=$strStart and @SystemTime&lt;=$strEnd])]
+            ]
+        </Select>
+        <Suppress Path='ForwardedEvents'>
+	      *[System[($($sb -join ''))]]
+	    </Suppress>
+        </Query>
+    </QueryList>
+"@
+
+    #endregion hide 
+
+    Write-Debug $xml  
+
+    <#################################################################### 
+    India inactive staff requesting Kerberos authentication ticket (TGT),
+    causing excessive audit failures. Temporarily control the frequency
+    of email alerts for event id 4768.
+    ####################################################################>
+
+    $failedEvents = Get-WinEvent -FilterXml $xml
+
+    # ignore audit failure (group by id) with 9 or less events
+    $failedEventsGroup = $failedEvents | group id | Where-Object { $_.Count -ge $eventGroupCountThreshold } | sort count -desc
+
+    $timer = New-Object -TypeName System.Diagnostics.Stopwatch
+    $timer.Start()
+
+    # container (array) CSVs created (attachment => email alert)
+    $attachments = @()
+
+    # string builder for the alert message
+    $sbBody = New-Object -TypeName System.Text.StringBuilder
+
+    $failedEventsGroup | ForEach-Object {
+        # "Audit Failure Events:  {0}" -f $_.Name
+        # "`r`n"
+        $_.Group | group MachineName | ForEach-Object {
+            # ignore MachineName if reported audit failure with 9 or less events
+            if ($_.Count -ge $eventCountThreshold)
+            {
+                # export to csv...
+                "Reported by MachineName: {0}" -f $($_.Name).Split(".")[0]
+                $events = $_.Group
+                $attachments += Export-EventsToCsv -reportDate $start -events $events -machineName $(($_.Name).Split(".")[0])
+
+                # append failed event info into string builder
+                $sbBody.Append($(($_.Name).Split(".")[0]) + " reported " + $($_.Count) + " event IDs " + $($_.Group.Id | Select -First 1 -Unique) + " audit failures in the past 15-minutes.<br />") | Out-Null
+                # $sbBody.ToString()
+
+                Write-Debug $($events | Out-String)
+                "Event count: {0}`r`n" -f $_.Group.count
+            } # end MachineName group with 10 or more events
+
+            
+
+
+        } # end group by MachineName    
+    } # end $failedEventsGroup
+
+    # send alert to SystemsAdmin and attach all CSVs 
+    # skip sendMailAlert if there is no $failedEventsGroup to report
+    if ( $($attachments.Length) -ge 1)
+    {
+        sendMailAlert -subject "AUDIT FAILURE" -body "$($sbBody.ToString())<br />See attached CSV(s) for more information." -attachments $attachments
     }
     else
     {
-        $sb.Append("EventID=" + $suppressEvents[$i]) | Out-Null
-    }    
-}
-
-$xml = @"
-<QueryList>
-    <Query Id='0' Path='ForwardedEvents'>
-    <Select Path='ForwardedEvents'>
-        *[
-          System[band(Keywords,4503599627370496) 
-          and
-          (TimeCreated[@SystemTime&gt;=$strStart and @SystemTime&lt;=$strEnd])]
-        ]
-    </Select>
-    <Suppress Path='ForwardedEvents'>
-	  *[System[($($sb -join ''))]]
-	</Suppress>
-    </Query>
-</QueryList>
-"@
-
-#endregion hide 
-
-Write-Debug $xml  
-
-<#################################################################### 
-India inactive staff requesting Kerberos authentication ticket (TGT),
-causing excessive audit failures. Temporarily control the frequency
-of email alerts for event id 4768.
-####################################################################>
-
-#############################
-$flag = "$ScriptDir\lastrun-4768.txt"
-$skipDuration = 6 # skip monitoring event id 4768 for 6-hours
-$sleepDuration = 900 # 900 # (n) seconds
-$eventGroupCountThreshold = 10
-$eventCountThreshold = 5 # bump 5 to 10
-#############################
-
-$failedEvents = Get-WinEvent -FilterXml $xml
-
-# ignore audit failure (group by id) with 9 or less events
-$failedEventsGroup = $failedEvents | group id | Where-Object { $_.Count -ge $eventGroupCountThreshold } | sort count -desc
-
-$timer = New-Object -TypeName System.Diagnostics.Stopwatch
-$timer.Start()
-
-# container (array) CSVs created (attachment => email alert)
-$attachments = @()
-
-$failedEventsGroup | ForEach-Object {
-    # "Audit Failure Events:  {0}" -f $_.Name
-    # "`r`n"
-    $_.Group | group MachineName | ForEach-Object {
-        # ignore MachineName if reported audit failure with 9 or less events
-        if ($_.Count -ge $eventCountThreshold)
-        {
-            # export to csv...
-            "Reported by MachineName: {0}" -f $($_.Name).Split(".")[0]
-            $events = $_.Group
-            $attachments += Export-EventsToCsv -reportDate $start -events $events -machineName $(($_.Name).Split(".")[0])
-
-            $events | ft -auto
-            "Event count: {0}`r`n" -f $_.Group.count
-        } # end MachineName group with 10 or more events
-    } # end group by MachineName    
-} # end $failedEventsGroup
-
-# send alert to SystemsAdmin and attach all CSVs 
-# skip sendMailAlert if there is no $failedEventsGroup to report
-if ( $($attachments.Length) -ge 1)
-{
-    sendMailAlert -subject "AUDIT FAILURE" -body "ALERT: Audit failures reported on $($attachments.Length) computer(s)/server(s) in the past 15-minutes.<br />See attached CSV(s) for more information." -attachments $attachments
-}
-else
-{
-    Write-Host "`r`n  There are no `$failedEventsGroup with more than ($eventCountThreshold) audit failures."
-    Write-Host "`r  Skip sending alert..."
-    # sendMailAlert -subject "AUDIT FAILURE" -body "No audit failure events match report criteria in the past 15-minutes."
-}
-
-"`r`n"
-$timer.Stop()
-$timer.Elapsed
-
-#region old code block ###
-<#
-# is this the script's first run?
-# test if file does not exist, create a new file with current's date and time
-
-if ( !$(Test-Path -Path $flag) )
-{
-    Write-Host "`r`nThe file $flag not found..." -ForegroundColor Red
-    Write-Host "Create missing file and set value to current date..." -ForegroundColor Red
-    New-Item -Path $flag -Value $(Get-Date) | Out-Null
-
-    ###########################################################
-
-    # run initial tasks here...
-    Write-Host "Get failed events here excluding events 5447, 4662, and 4674..." -ForegroundColor Red
-    
-    # exclude event ids (5447, 4662, 4674) and filter with less than 11 events
-    # too much events 4768, and 4776
-    $failedEventsGroup = Get-WinEvent -FilterXml $xml | group id | Where-Object { 
-        ($_.name -ne 5447 -and $_.name -ne 4662 -and $_.name -ne 4674) -and $_.count -gt $eventCountThreshold
-    } | sort count -Descending
-
-    ###########################################################    
-}
-else
-{
-    # $flag file exists; therefore not the initial run of the script
-    # run more test to meet alternate tasks (Get failed event groups excluding
-    # initial event ids plus event id 4768
-
-    Write-Host "The file $flag exists..." -ForegroundColor Green  
-    Write-Host "Do more tests here..." -ForegroundColor Green
-
-    # is last run date time (n) minutes in the past?
-    if ($(New-TimeSpan -Start $(Get-Date $(Get-Content -Path $flag)) -End $(Get-Date)).TotalHours -ge $skipDuration )
-    {
-        Write-Host "  Last run date time is more than ($skipDuration) hours ago..." -ForegroundColor Green
-        Write-Host "  Rerun initial tasks here..." -ForegroundColor Green
-
-        #########################################################
-        # rerun initial tasks but exclude event id 4768 here... #
-
-        $failedEventsGroup = Get-WinEvent -FilterXml $xml | group id | Where-Object { 
-            ( $_.name -ne 5447 -and $_.name -ne 4662 -and $_.name -ne 4674 ) -and $_.count -gt $eventCountThreshold
-        } | sort count -Descending
-
-        #########################################################
-
-        # update $flag last run time value
-        Write-Host "  Create a new file and set value to current date..." -ForegroundColor Green
-        New-Item -Path $flag -Value $(Get-Date) -Force | Out-Null
-
-        # repeat more tasks here
-        # Write-Host "  Repeat more tasks here..." -ForegroundColor Magenta
+        Write-Host "`r`n  There are no `$failedEventsGroup with more than ($eventCountThreshold) audit failures."
+        Write-Host "`r  Skip sending alert..."
+        # sendMailAlert -subject "AUDIT FAILURE" -body "No audit failure events match report criteria in the past 15-minutes."
     }
-    else 
-    {
-        # skip for tasks for the next (n) hours.
-        # Write-Host "  $(Get-Date)`r`n  Do nothing in the next ($skipDuration) hours..." -ForegroundColor Yellow
 
-        Write-Host "  Rerun initial tasks but exclude event id 4768 here......" -ForegroundColor Green
+    "`r`n"
+    $timer.Stop()
+    $timer.Elapsed
 
-        #########################################################
-        # rerun initial tasks but exclude event id 4768 here... #
 
-        $failedEventsGroup = Get-WinEvent -FilterXml $xml | group id | Where-Object { 
-            ( $_.name -ne 5447 -and $_.name -ne 4662 -and $_.name -ne 4674 -and $_.name -ne 4768 ) -and $_.count -gt $eventCountThreshold
-        } | sort count -Descending
 
-        #########################################################
-    }
-}
+    $failedEventsGroup = $null 
 
-$failedEventsGroup | ft -auto
+    Write-Host "`r`n  End of do/while loop; pause for $($sleepDuration/60) minute(s),`r`n  please wait...`r`n" -ForegroundColor Yellow
+    # Add-ProgressBar -sleepDurationMinutes $($sleepDuration/60)
+    Start-Sleep -Seconds $sleepDuration
 
-$attachments = @()
-
-foreach ( $group in $failedEventsGroup )
-{
-    # export each group of events to CSV and add the filename to attachments (array)
-    $attachments += $(Export-EventsToCsv -reportDate $start -events $($group.Group))
-     
-}
-
-# send alert to SystemsAdmin and attach all CSVs 
-# skip sendMailAlert if there is no $failedEventsGroup to report
-if ( $($attachments.Length) -ge 1)
-{
-    sendMailAlert -subject "AUDIT FAILURE" -body "There are audit failures reported in the past 15-minutes.<br />See attachments for details." -attachments $attachments
-}
-else
-{
-    Write-Host "`r`n  No `$failedEventsGroup with events reported exceeding ($eventCountThreshold)."
-    # sendMailAlert -subject "AUDIT FAILURE" -body "No audit failure events match report criteria in the past 15-minutes."
-}
-
-Write-Debug $("Duration: {0} seconds" -f $(($timer.ElapsedMilliseconds)/1000))
-Write-Debug "`r`n"
-
-# set the current value of $end to next loop's $start
-# $start = $end
-Write-Debug $("Next loop's SearchStartDateTime '{0}'" -f $start.ToString("yyyy-MM-ddTHH:mm:ss.fffZ"))
-Write-Debug $("Next loop's SearchEndDateTime '{0}'" -f $start.AddMilliseconds($searchRangeMilliseconds).ToString("yyyy-MM-ddTHH:mm:ss.fffZ"))
-Write-Debug "`r`n"
-Write-Debug $("Next loop will start at '{0}'" -f $start.AddMilliseconds($searchRangeMilliseconds).ToString("yyyy-MM-ddTHH:mm:ss.fffZ"))
-
-$timer.Stop()
-# $timerElapsedMilliseconds = $($timer.ElapsedMilliseconds)
-
-"`r`n  Duration: {0} (ElapsedSeconds)" -f $(($timer.ElapsedMilliseconds)/1000)
-
-# $sleepDurationMinutes = $(($searchRangeMilliseconds - $timerElapsedMilliseconds)/60000)
-# Add-ProgressBar -sleepDurationMinutes $sleepDurationMinute
-
-# set $failedEventsGroup variable to $null #>
-
-$failedEventsGroup = $null 
-
-Write-Host "`r`n  End of do/while loop; pause for $($sleepDuration/60) minute(s),`r`n  please wait...`r`n" -ForegroundColor Yellow
-# Add-ProgressBar -sleepDurationMinutes $($sleepDuration/60)
-Start-Sleep -Seconds $sleepDuration
 } while ( $true ) # end of do loop
-
-#endregion old code block ###
