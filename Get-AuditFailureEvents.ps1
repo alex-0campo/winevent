@@ -1,7 +1,7 @@
 ﻿[CmdletBinding()]
 param(
     [Parameter()]
-    [string[]]$suppressEvents = @(5447, 4662, 4674, 4768, 4776)
+    [string[]]$suppressEvents = @(5447, 4662, 4674, 4776)
 )
 
 # Clear-Host
@@ -157,8 +157,8 @@ $ScriptDir = Split-Path $script:MyInvocation.MyCommand.Path
         {
             $MailMessage = @{
                 From = "securityAlert@landesa.org"
-                To = "Alex Ocampo <alexo@landesa.org>" # "Landesa Global IT Team <Landesa_GBL_IT@rdiland.org>"
-                Subject = "TEST: " + $subject
+                To = "Landesa Global IT Team <Landesa_GBL_IT@rdiland.org>"
+                Subject = $subject
                 Body = $body
                 SmtpServer = "10.0.0.10"
                 Attachments = $attachments
@@ -168,7 +168,7 @@ $ScriptDir = Split-Path $script:MyInvocation.MyCommand.Path
         {
             $MailMessage = @{
                 From = "securityAlert@landesa.org"
-                To = "Alex Ocampo <alexo@landesa.org>" # "Landesa Global IT Team <Landesa_GBL_IT@rdiland.org>"
+                To = "Landesa Global IT Team <Landesa_GBL_IT@rdiland.org>"
                 Subject = $subject
                 Body = $body
                 SmtpServer = "10.0.0.10"
